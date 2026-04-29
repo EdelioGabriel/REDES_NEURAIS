@@ -133,7 +133,7 @@ def pde_residual(model, X):
         inputs=X,
         grad_outputs=torch.ones_like(u_y),
         create_graph=True
-    )[0][:, 0].unsqueeze(1)
+    )[0][:, 1].unsqueeze(1)
 
     res = u_xx + u_yy
 
@@ -166,7 +166,7 @@ def loss_function(model, X_colloc, X_bc, U_bc, w_data, w_pde):
     loss_data = torch.mean((U_pred - U_bc) ** 2)
 
     # loss total
-    loss = w_data * loss_data + w_pde + loss_pde
+    loss = w_data * loss_data + w_pde * loss_pde
 
     return loss, loss_data, loss_pde
 
