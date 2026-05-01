@@ -1,34 +1,26 @@
 """
-Este script foi feito totalmente por IA, por meio do seguinte prompt
+plot_utils.py — funções de visualização para notebooks de PINNs.
 
-Quero esses plots:
-
- - curvas de aprendizado
- - mapas de calor (solução predita, analítica e erro absoluto)
- - perfis 1d
- - distribuição de pontos
-
-use o plotly
-
-Me retorne o script completo. Quero um layout simples e minimalista
+Todas as funções recebem arrays numpy prontos — nenhuma dependência de torch,
+modelos ou funções analíticas. A conversão de tensores para arrays é
+responsabilidade do script particular de cada exemplo.
 """
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import torch
 import numpy as np
 
 # ── Dimensões e fonte ──────────────────────────────────────────────────────────
 
-FONT_SIZE   = 16          # tamanho base — legível em artigo ABNT
+FONT_SIZE   = 16
 FONT_FAMILY = "Arial"
-SQ_SIZE     = 500         # lado do plot quadrado (px)
+SQ_SIZE     = 500
 
 AXIS_COMMON = dict(
     showline=True,
     linewidth=1.5,
     linecolor="black",
-    mirror=True,           # borda nos quatro lados → quadrado
+    mirror=True,
     ticks="inside",
     ticklen=5,
     tickwidth=1.5,
@@ -42,9 +34,7 @@ LAYOUT_BASE = dict(
 )
 
 COLORSCALE = "RdBu_r"
-
-# Paleta de linhas (3 cortes)
-COLORS = ["#2C3E50", "#E74C3C", "#2980B9"]
+COLORS     = ["#2C3E50", "#E74C3C", "#2980B9", "#27AE60"]
 
 # ── Funções auxiliares ─────────────────────────────────────────────────────────
 
@@ -60,28 +50,29 @@ def _square_axis(title, log=False):
 
 def plot_loss(history):
     """
-    Plota as curvas de aprendizado: loss total, loss_data e loss_pde.
+    Plota as curvas de aprendizado disponíveis no history.
+    Aceita qualquer combinação de: 'loss', 'loss_data', 'loss_pde'
 
     Args:
         history: dicionário {'loss': [], 'loss_data': [], 'loss_pde': []}
     """
-    epochs = list(range(len(history["loss"])))
+    labels = {
+        'loss':      ('Total', '#2C3E50', 'solid'),
+        'loss_data': ('Dados', '#E74C3C', 'dash'),
+        'loss_pde':  ('PDE',   '#2980B9', 'dot'),
+    }
+
+    epochs = list(range(len(next(iter(history.values())))))
 
     fig = go.Figure()
 
-    styles = [
-        ("Total",  "#2C3E50", "solid"),
-        ("Dados",  "#E74C3C", "dash"),
-        ("PDE",    "#2980B9", "dot"),
-    ]
-    keys = ["loss", "loss_data", "loss_pde"]
-
-    for (name, color, dash), key in zip(styles, keys):
-        fig.add_trace(go.Scatter(
-            x=epochs, y=history[key],
-            mode="lines", name=name,
-            line=dict(color=color, width=2.5, dash=dash),
-        ))
+    for key, (name, color, dash) in labels.items():
+        if key in history:
+            fig.add_trace(go.Scatter(
+                x=epochs, y=history[key],
+                mode='lines', name=name,
+                line=dict(color=color, width=2, dash=dash)
+            ))
 
     fig.update_layout(
         **LAYOUT_BASE,
@@ -91,7 +82,9 @@ def plot_loss(history):
         width=SQ_SIZE,
         height=SQ_SIZE,
         legend=dict(
-            x=0.97, y=0.97, xanchor="right", yanchor="top",
+            x=1.02, y=1,
+            xanchor="left", yanchor="top",
+            orientation="v",
             font=dict(size=FONT_SIZE - 1),
             borderwidth=1,
         ),
@@ -99,7 +92,7 @@ def plot_loss(history):
 
     fig.update_yaxes(
         type="log",
-        dtick=1,              # só potências de 10
+        dtick=1,
         exponentformat="power",
         showexponent="all",
     )
@@ -109,181 +102,119 @@ def plot_loss(history):
 
 # ── 2. Mapas de calor ─────────────────────────────────────────────────────────
 
-def plot_heatmaps(model, analytical_fn, device, n_grid=100):
+def plot_heatmaps(U_pred, U_ref, x, y, title='Solução'):
     """
-    Plota mapas de calor: predição, solução analítica e erro absoluto.
-
-    Predição e Analítica compartilham escala de cor → barra única (direita).
-    Erro absoluto tem sua própria escala, posicionada sem sobrepor imagens.
+    Plota mapas de calor: solução predita, referência e erro absoluto.
 
     Args:
-        model:         rede neural treinada
-        analytical_fn: função de solução analítica
-        device:        dispositivo de execução
-        n_grid:        resolução da grade
+        U_pred: array (n_grid, n_grid) — solução predita
+        U_ref:  array (n_grid, n_grid) — solução de referência
+        x:      array (n_grid,)        — coordenadas x
+        y:      array (n_grid,)        — coordenadas y
+        title:  título do plot
     """
-    x = np.linspace(0, 1, n_grid)
-    y = np.linspace(0, 1, n_grid)
-    X, Y = np.meshgrid(x, y)
+    E_abs = np.abs(U_pred - U_ref)
 
-    X_flat = torch.tensor(
-        np.stack([X.ravel(), Y.ravel()], axis=1),
-        dtype=torch.float32,
-        device=device,
-    )
-
-    with torch.no_grad():
-        U_pred = model(X_flat).cpu().numpy().reshape(n_grid, n_grid)
-
-    U_anal = analytical_fn(X_flat).cpu().numpy().reshape(n_grid, n_grid)
-    E_abs  = np.abs(U_pred - U_anal)
-
-    # Escala compartilhada para predição e analítica
-    vmin = min(U_pred.min(), U_anal.min())
-    vmax = max(U_pred.max(), U_anal.max())
+    vmin = min(U_pred.min(), U_ref.min())
+    vmax = max(U_pred.max(), U_ref.max())
 
     fig = make_subplots(
         rows=1, cols=3,
-        subplot_titles=["Predição", "Analítica", "Erro absoluto"],
-        horizontal_spacing=0.15,   # espaço extra para as barras não invadirem
+        subplot_titles=["Predição", "Referência", "Erro absoluto"],
+        horizontal_spacing=0.15,
+        column_widths=[0.33, 0.33, 0.33],
     )
 
-    # -- Predição: sem barra própria (a barra compartilhada será adicionada manualmente)
-    fig.add_trace(go.Heatmap(
-        z=U_pred, x=x, y=y,
-        colorscale=COLORSCALE,
-        zmin=vmin, zmax=vmax,
-        showscale=False,
-    ), row=1, col=1)
+    colorbar_configs = [
+        None,
+        dict(x=0.655, y=0.5, len=0.9, thickness=12),
+        dict(x=1.00,  y=0.5, len=0.9, thickness=12),
+    ]
 
-    # -- Analítica: exibe a barra compartilhada (col 2, margem direita do subplot)
-    fig.add_trace(go.Heatmap(
-        z=U_anal, x=x, y=y,
-        colorscale=COLORSCALE,
-        zmin=vmin, zmax=vmax,
-        showscale=True,
-        colorbar=dict(
-            len=0.85,
-            thickness=14,
-            x=0.65,          # logo à direita do subplot 2 sem invadir o 3
-            xpad=6,
-            title=dict(text="u", font=dict(size=FONT_SIZE - 1), side="right"),
-            tickfont=dict(size=FONT_SIZE - 2),
-        ),
-    ), row=1, col=2)
+    for col, (Z, zmin, zmax, showscale, cbar) in enumerate(zip(
+        [U_pred, U_ref,  E_abs],
+        [vmin,   vmin,   0],
+        [vmax,   vmax,   E_abs.max()],
+        [False,  True,   True],
+        colorbar_configs
+    ), start=1):
 
-    # -- Erro absoluto: barra independente, encostada na margem direita da figura
-    fig.add_trace(go.Heatmap(
-        z=E_abs, x=x, y=y,
-        colorscale="Reds",
-        zmin=0, zmax=E_abs.max(),
-        showscale=True,
-        colorbar=dict(
-            len=0.85,
-            thickness=14,
-            x=1.01,          # margem direita da figura
-            xpad=6,
-            title=dict(text="|err|", font=dict(size=FONT_SIZE - 1), side="right"),
-            tickfont=dict(size=FONT_SIZE - 2),
-        ),
-    ), row=1, col=3)
+        fig.add_trace(go.Heatmap(
+            z=Z, x=x, y=y,
+            colorscale=COLORSCALE,
+            zmin=zmin, zmax=zmax,
+            showscale=showscale,
+            colorbar=cbar,
+        ), row=1, col=col)
 
-    # Bordas nos eixos de cada subplot
     for col in [1, 2, 3]:
         fig.update_xaxes(
             **AXIS_COMMON,
             title_text="x",
             title_font=dict(size=FONT_SIZE),
-            range=[0, 1],             
-            constrain="domain",        
+            range=[0, 1],
+            constrain="domain",
             row=1, col=col,
         )
-
         fig.update_yaxes(
             **AXIS_COMMON,
             title_text="y" if col == 1 else "",
             title_font=dict(size=FONT_SIZE),
             range=[0, 1],
-            constrain="domain",        
-            scaleanchor=f"x{'' if col==1 else col}",
+            constrain="domain",
+            scaleanchor=f"x{'' if col == 1 else col}",
             scaleratio=1,
             row=1, col=col,
         )
 
     fig.update_layout(
         **LAYOUT_BASE,
-        title=dict(
-            text="Solução — Equação de Laplace 2D",
-            font=dict(size=FONT_SIZE + 2),
-        ),
-        height=520,
-        width=1050
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        height=450,
+        width=1000,
     )
 
-    # Título dos subplots com fonte ABNT
     for ann in fig.layout.annotations:
         ann.font = dict(size=FONT_SIZE)
 
     fig.show()
 
 
-# ── 3. Perfis 1D (subplots) ───────────────────────────────────────────────────
+# ── 3. Perfis 1D ──────────────────────────────────────────────────────────────
 
-def plot_profiles(model, analytical_fn, device, slices=None):
+def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'):
     """
-    Plota perfis 1D em subplots individuais — um subplot por corte em y.
-
-    Layout:
-        3 cortes → 1 linha × 3 colunas  (não-quadrado, conforme solicitado)
-        4 cortes → 2 linhas × 2 colunas (quadrado)
-        Qualquer outro número → 1 linha × N colunas
+    Plota perfis 1D comparando predição vs referência.
 
     Args:
-        model:         rede neural treinada
-        analytical_fn: função de solução analítica
-        device:        dispositivo de execução
-        slices:        lista de valores de y para os cortes (default: [0.25, 0.5, 0.75])
+        U_pred_slices: lista de arrays (n,) — predição em cada corte
+        U_ref_slices:  lista de arrays (n,) — referência em cada corte
+        x:             array (n,)           — coordenadas x
+        slices:        lista de valores do corte (ex: [0.25, 0.5, 0.75])
+        title:         título do plot
     """
     if slices is None:
         slices = [0.25, 0.5, 0.75]
 
     n = len(slices)
 
-    # Decide layout
-    if n == 4:
-        rows, cols = 2, 2
-    else:
-        rows, cols = 1, n
-
-    subplot_titles = [f"y = {y_val}" for y_val in slices]
+    rows, cols = (2, 2) if n == 4 else (1, n)
 
     fig = make_subplots(
         rows=rows, cols=cols,
-        subplot_titles=subplot_titles,
+        subplot_titles=[f"y = {y_val}" for y_val in slices],
         shared_yaxes=True,
         horizontal_spacing=0.10,
         vertical_spacing=0.18,
     )
 
-    x_pts = np.linspace(0, 1, 200)
-
-    for idx, (y_val, color) in enumerate(zip(slices, COLORS[:n] + COLORS[:max(0, n-3)])):
+    for idx, (y_val, U_pred, U_ref) in enumerate(zip(slices, U_pred_slices, U_ref_slices)):
         row = idx // cols + 1
         col = idx %  cols + 1
-
-        X_slice = torch.tensor(
-            np.stack([x_pts, np.full_like(x_pts, y_val)], axis=1),
-            dtype=torch.float32,
-            device=device,
-        )
-
-        with torch.no_grad():
-            U_pred = model(X_slice).cpu().numpy().ravel()
-
-        U_anal = analytical_fn(X_slice).cpu().numpy().ravel()
+        color = COLORS[idx % len(COLORS)]
 
         fig.add_trace(go.Scatter(
-            x=x_pts, y=U_pred,
+            x=x, y=U_pred,
             mode="lines",
             name="Predição",
             legendgroup="pred",
@@ -292,15 +223,14 @@ def plot_profiles(model, analytical_fn, device, slices=None):
         ), row=row, col=col)
 
         fig.add_trace(go.Scatter(
-            x=x_pts, y=U_anal,
+            x=x, y=U_ref,
             mode="lines",
-            name="Analítica",
-            legendgroup="anal",
+            name="Referência",
+            legendgroup="ref",
             line=dict(color=color, width=2.5, dash="dash"),
             showlegend=(idx == 0),
         ), row=row, col=col)
 
-    # Bordas em todos os eixos
     for r in range(1, rows + 1):
         for c in range(1, cols + 1):
             fig.update_xaxes(
@@ -316,38 +246,21 @@ def plot_profiles(model, analytical_fn, device, slices=None):
                 row=r, col=c,
             )
 
-    # Dimensões: quadrado se 4 perfis, retangular caso contrário
-    if n == 4:
-        fig_w, fig_h = SQ_SIZE + 80, SQ_SIZE + 80
-    else:
-        fig_w = cols * (SQ_SIZE // 2) + 80
-        fig_h = SQ_SIZE // 2 + 120
+    fig_w = SQ_SIZE + 80       if n == 4 else cols * (SQ_SIZE // 2) + 80
+    fig_h = SQ_SIZE + 80       if n == 4 else SQ_SIZE // 2 + 120
 
     fig.update_layout(
         **LAYOUT_BASE,
-        title=dict(
-            text="Perfis 1D — cortes horizontais",
-            font=dict(size=FONT_SIZE + 2),
-        ),
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
         width=fig_w,
         height=fig_h,
         legend=dict(
-            x=0.98, y=0.98, xanchor="right", yanchor="top",
-            font=dict(size=FONT_SIZE - 1),
-            borderwidth=1,
-        ),
-    )
-
-    fig.update_layout(
-        legend=dict(
-            x=1.02,            # > 1 joga pra fora
-            y=1,
-            xanchor="left",
-            yanchor="top",
+            x=1.02, y=1,
+            xanchor="left", yanchor="top",
             orientation="v",
             font=dict(size=FONT_SIZE - 1),
             borderwidth=1,
-        )
+        ),
     )
 
     for ann in fig.layout.annotations:
@@ -358,36 +271,41 @@ def plot_profiles(model, analytical_fn, device, slices=None):
 
 # ── 4. Distribuição de pontos ─────────────────────────────────────────────────
 
-def plot_points(X_col, X_bc):
+def plot_points(X_col, X_bc=None, title='Distribuição dos pontos de amostragem'):
     """
-    Plota a distribuição dos pontos de colocação e de contorno.
+    Plota a distribuição dos pontos de colocação e, opcionalmente, de contorno.
+    X_bc é opcional pois a hard-PINN não usa training points.
 
     Args:
-        X_col: tensor de shape (N_c, 2) — pontos de colocação
-        X_bc:  tensor de shape (4*N_b, 2) — pontos de contorno
+        X_col: array (N_c, 2) — pontos de colocação
+        X_bc:  array (N_b, 2) — pontos de contorno (opcional)
+        title: título do plot
     """
-    X_col_np = X_col.detach().cpu().numpy()
-    X_bc_np  = X_bc.detach().cpu().numpy()
 
+    # converte para numpy se necessário
+    if hasattr(X_col, 'detach'):
+        X_col = X_col.detach().cpu().numpy()
+    if X_bc is not None and hasattr(X_bc, 'detach'):
+        X_bc = X_bc.detach().cpu().numpy()
+        
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
-        x=X_col_np[:, 0], y=X_col_np[:, 1],
+        x=X_col[:, 0], y=X_col[:, 1],
         mode="markers", name="Colocação",
         marker=dict(color="#2980B9", size=5, opacity=0.6),
     ))
-    fig.add_trace(go.Scatter(
-        x=X_bc_np[:, 0], y=X_bc_np[:, 1],
-        mode="markers", name="Contorno",
-        marker=dict(color="#E74C3C", size=7, symbol="square"),
-    ))
+
+    if X_bc is not None:
+        fig.add_trace(go.Scatter(
+            x=X_bc[:, 0], y=X_bc[:, 1],
+            mode="markers", name="Contorno",
+            marker=dict(color="#E74C3C", size=7, symbol="square"),
+        ))
 
     fig.update_layout(
         **LAYOUT_BASE,
-        title=dict(
-            text="Distribuição dos pontos de amostragem",
-            font=dict(size=FONT_SIZE + 2),
-        ),
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
         xaxis=dict(
             **AXIS_COMMON,
             title=dict(text="x", font=dict(size=FONT_SIZE)),
@@ -403,22 +321,12 @@ def plot_points(X_col, X_bc):
         width=SQ_SIZE,
         height=SQ_SIZE,
         legend=dict(
-            x=0.97, y=0.97, xanchor="right", yanchor="top",
-            font=dict(size=FONT_SIZE - 1),
-            borderwidth=1,
-        ),
-    )
-
-    fig.update_layout(
-        legend=dict(
-            x=1.02,            # > 1 joga pra fora
-            y=1,
-            xanchor="left",
-            yanchor="top",
+            x=1.02, y=1,
+            xanchor="left", yanchor="top",
             orientation="v",
             font=dict(size=FONT_SIZE - 1),
             borderwidth=1,
-        )
+        ),
     )
 
     fig.show()
