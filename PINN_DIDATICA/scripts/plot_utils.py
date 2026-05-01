@@ -102,7 +102,7 @@ def plot_loss(history):
 
 # ── 2. Mapas de calor ─────────────────────────────────────────────────────────
 
-def plot_heatmaps(U_pred, U_ref, x, y, title='Solução'):
+def plot_heatmaps(U_pred, U_ref, x, y, title='Solução', xlabel='x', ylabel='y'):
     """
     Plota mapas de calor: solução predita, referência e erro absoluto.
 
@@ -112,6 +112,8 @@ def plot_heatmaps(U_pred, U_ref, x, y, title='Solução'):
         x:      array (n_grid,)        — coordenadas x
         y:      array (n_grid,)        — coordenadas y
         title:  título do plot
+        xlabel:        título do eixo x
+        ylabel:        título do eixo y
     """
     E_abs = np.abs(U_pred - U_ref)
 
@@ -150,7 +152,7 @@ def plot_heatmaps(U_pred, U_ref, x, y, title='Solução'):
     for col in [1, 2, 3]:
         fig.update_xaxes(
             **AXIS_COMMON,
-            title_text="x",
+            title_text=xlabel,
             title_font=dict(size=FONT_SIZE),
             range=[0, 1],
             constrain="domain",
@@ -158,7 +160,7 @@ def plot_heatmaps(U_pred, U_ref, x, y, title='Solução'):
         )
         fig.update_yaxes(
             **AXIS_COMMON,
-            title_text="y" if col == 1 else "",
+            title_text=ylabel if col == 1 else "",
             title_font=dict(size=FONT_SIZE),
             range=[0, 1],
             constrain="domain",
@@ -182,7 +184,7 @@ def plot_heatmaps(U_pred, U_ref, x, y, title='Solução'):
 
 # ── 3. Perfis 1D ──────────────────────────────────────────────────────────────
 
-def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'):
+def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D', xlabel='x', ylabel='t', slice_label='t'):
     """
     Plota perfis 1D comparando predição vs referência.
 
@@ -192,6 +194,9 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
         x:             array (n,)           — coordenadas x
         slices:        lista de valores do corte (ex: [0.25, 0.5, 0.75])
         title:         título do plot
+        xlabel:        título do eixo x
+        ylabel:        título do eixo y
+        slice_labels:  título dos slices
     """
     if slices is None:
         slices = [0.25, 0.5, 0.75]
@@ -202,7 +207,7 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
 
     fig = make_subplots(
         rows=rows, cols=cols,
-        subplot_titles=[f"y = {y_val}" for y_val in slices],
+        subplot_titles=[f"{slice_label} = {val}" for val in slices],
         shared_yaxes=True,
         horizontal_spacing=0.10,
         vertical_spacing=0.18,
@@ -235,13 +240,13 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
         for c in range(1, cols + 1):
             fig.update_xaxes(
                 **AXIS_COMMON,
-                title_text="x",
+                title_text=xlabel,
                 title_font=dict(size=FONT_SIZE),
                 row=r, col=c,
             )
             fig.update_yaxes(
                 **AXIS_COMMON,
-                title_text="u(x, y)" if c == 1 else "",
+                title_text=ylabel if c == 1 else "",
                 title_font=dict(size=FONT_SIZE),
                 row=r, col=c,
             )
