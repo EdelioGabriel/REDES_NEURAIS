@@ -1,110 +1,16 @@
 """
-Este script contém uma pipeline padrão para problemas que envolvam equações de Laplacesubmetidas a condições de contorno retangulares de duas dimensões
-As funções forma construídas de maneira genaralizável, ou seja, para permitir que se defina os parâmetros no momento da chamada
-dando mais flexibilidade durante a implementação e possibilitando ajustes rápidos.
+Notas do autor:
+
+Este script contém as funções necessárias para implementação de uma vanilla-PINN para a resolução de um problema direto estacionário do tipo da equação de Laplace, com condições de contorno retangulares.
+
+A solução analítica é particular para o problema introduzido no notebook 01_direct_stationary_vanilla.ipynb
 """
 
-import torch.nn as nn
-import torch.optim as optim
 import torch
 import numpy as np
 
 # Definição do local onde o código serpa executado. Por padrão, gpu
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f'Usando: {device}')
-
-# Classe de construção da arquitetura da rede - tipo MLP (Multilayer Perceptron)
-class PINN(nn.Module):
-    """
-    Classe para definir a arquitetura MLP
-    Recebe como parâmetros de arquitetura:
-
-        n_inputs: Quantidade de dados de entrada
-        n_outputs: Quantidade de dados de saída
-        n_hidden: Quantidade de neurônios nas camadas ocultas
-        n_layers: Quantidade de camadas
-        activation: Função de ativação
-
-    Retorna: O vetor X após o passo forward
-    """
-    def __init__(self, n_inputs, n_outputs, n_hidden, n_layers, activation):
-        super().__init__()
-
-        layers = []
-
-        layers.append(nn.Linear(n_inputs, n_hidden))
-        layers.append(activation())
-
-        for _ in range(n_layers - 1):
-            layers.append(nn.Linear(n_hidden, n_hidden))
-            layers.append(activation())
-
-        layers.append(nn.Linear(n_hidden, n_outputs))
-
-        self.net = nn.Sequential(*layers)
-
-    def forward(self, X):
-        X = self.net(X)
-        return X
-    
-# Função de amostragem dos pontos de colocação - internos    
-def sample_collocation(N_c, lb, ub, device):
-    """
-    Amostra N_c pontos aleatórios no interior do domínio [lb, ub]^2.
-    
-    Args:
-        N_c:    número de pontos de colocação
-        lb:     limite inferior do domínio (float)
-        ub:     limite superior do domínio (float)
-        device: dispositivo de execução (cpu ou cuda)
-
-    Retorna tensor de shape (N_c, 2) com requires_grad=True.
-    """
-    X = torch.rand(N_c, 2, device=device) * (ub - lb) + lb
-    X.requires_grad_(True)
-    return X
-
-# Função para amostragem dos pontos no domínio
-def sample_boundary(N_b, lb, ub, bc_fns, device):
-    """
-    Amostra N_b pontos em cada face do domínio [lb, ub]^2 e calcula
-    os valores de CC correspondentes.
-
-    Args:
-        N_b:    número de pontos por face
-        lb:     limite inferior do domínio (float)
-        ub:     limite superior do domínio (float)
-        bc_fns: dicionário com as funções de CC para cada face:
-                {'bottom': fn, 'top': fn, 'left': fn, 'right': fn}
-                cada fn recebe um tensor 1D e retorna um tensor 1D
-        device: dispositivo de execução (cpu ou cuda)
-
-    Retorna:
-        X_bc: tensor de shape (4 * N_b, 2) com as coordenadas
-        U_bc: tensor de shape (4 * N_b, 1) com os valores de CC
-    """
-    t = torch.rand(N_b, device=device) * (ub - lb) + lb
-
-    # face inferior: y = lb, x livre
-    X_bottom = torch.stack([t, torch.full_like(t, lb)], dim=1)
-    U_bottom = bc_fns['bottom'](t).unsqueeze(1)
-
-    # face superior: y = ub, x livre
-    X_top = torch.stack([t, torch.full_like(t, ub)], dim=1)
-    U_top = bc_fns['top'](t).unsqueeze(1)
-
-    # face esquerda: x = lb, y livre
-    X_left = torch.stack([torch.full_like(t, lb), t], dim=1)
-    U_left = bc_fns['left'](t).unsqueeze(1)
-
-    # face direita: x = ub, y livre
-    X_right = torch.stack([torch.full_like(t, ub), t], dim=1)
-    U_right = bc_fns['right'](t).unsqueeze(1)
-
-    X_bc = torch.cat([X_bottom, X_top, X_left, X_right], dim=0)
-    U_bc = torch.cat([U_bottom, U_top, U_left, U_right], dim=0)
-
-    return X_bc, U_bc
 
 # Cálculo do resíduo da PDE
 def pde_residual(model, X):
@@ -233,3 +139,67 @@ def analytical_solution(X):
     u = (torch.sinh(torch.pi * y) / torch.sinh(torch.tensor(torch.pi))) * torch.sin(torch.pi * x)
 
     return u
+
+def evaluate(model, analytical_fn, device, n_grid=100, slices=None):
+    """
+    Avalia o modelo treinado e retorna arrays prontos para plotagem.
+
+    Args:
+        model:         rede neural treinada
+        analytical_fn: função de solução analítica
+        device:        dispositivo de execução
+        n_grid:        resolução da grade
+        slices:        valores de y para os perfis 1D (default: [0.25, 0.5, 0.75])
+
+    Retorna dicionário com:
+        'x':             array (n_grid,)
+        'y':             array (n_grid,)
+        'U_pred':        array (n_grid, n_grid)
+        'U_ref':         array (n_grid, n_grid)
+        'U_pred_slices': lista de arrays (n_grid,)
+        'U_ref_slices':  lista de arrays (n_grid,)
+        'l2_error':      erro L2 relativo (escalar)
+    """
+    if slices is None:
+        slices = [0.25, 0.5, 0.75]
+
+    x = np.linspace(0, 1, n_grid)
+    y = np.linspace(0, 1, n_grid)
+    X, Y = np.meshgrid(x, y)
+
+    X_flat = torch.tensor(
+        np.stack([X.ravel(), Y.ravel()], axis=1),
+        dtype=torch.float32,
+        device=device
+    )
+
+    with torch.no_grad():
+        U_pred = model(X_flat).cpu().numpy().reshape(n_grid, n_grid)
+        U_ref  = analytical_fn(X_flat).cpu().numpy().reshape(n_grid, n_grid)
+
+    # erro L2 relativo
+    l2_error = np.linalg.norm(U_pred - U_ref) / np.linalg.norm(U_ref)
+
+    # perfis 1D
+    U_pred_slices = []
+    U_ref_slices  = []
+
+    for y_val in slices:
+        X_slice = torch.tensor(
+            np.stack([x, np.full_like(x, y_val)], axis=1),
+            dtype=torch.float32,
+            device=device
+        )
+        with torch.no_grad():
+            U_pred_slices.append(model(X_slice).cpu().numpy().ravel())
+            U_ref_slices.append(analytical_fn(X_slice).cpu().numpy().ravel())
+
+    return {
+        'x':             x,
+        'y':             y,
+        'U_pred':        U_pred,
+        'U_ref':         U_ref,
+        'U_pred_slices': U_pred_slices,
+        'U_ref_slices':  U_ref_slices,
+        'l2_error':      l2_error,
+    }
