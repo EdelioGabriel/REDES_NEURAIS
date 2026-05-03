@@ -168,7 +168,7 @@ def evaluate_hard(model, analytical_fn, device, n_grid=100, slices=None):
             device=device
         )
         with torch.no_grad():
-            U_pred_slices.append(model(X_slice).cpu().numpy().ravel())
+            U_pred_slices.append(trial_solution(model, X_slice).cpu().numpy().ravel())
             U_ref_slices.append(analytical_fn(X_slice).cpu().numpy().ravel())
 
     return {
