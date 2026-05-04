@@ -44,9 +44,9 @@ class PINN(nn.Module):
         return X
     
 # Função de amostragem dos pontos de colocação - internos    
-def sample_collocation(N_c, lb, ub, device):
+def sample_collocation_rectangular(N_c, lb, ub, device):
     """
-    Amostra N_c pontos aleatórios no interior de um domínio retangular.
+    Amostra N_c pontos aleatórios no interior de um domínio retangular
 
     Args:
         N_c:    número de pontos de colocação
@@ -117,44 +117,33 @@ def sample_boundary_rectangular_stationary(N_b, lb, ub, bc_fns, device):
 
     return X_bc, U_bc
 
-def sample_boundary_rectangular_transient(N_ic, N_bc, lb_x, ub_x, lb_t, ub_t, ic_fn, bc_fns, device):
+def sample_boundary_rectangular_transient(
+    N_ic, N_bc,
+    x_lb, x_ub,
+    t_lb, t_ub,
+    ic_fn, bc_fns,
+    device
+):
     """
-    Amostra pontos de CI e CCs para problemas transientes.
-
-    Args:
-        N_ic:   número de pontos na condição inicial
-        N_bc:   número de pontos por face espacial
-        lb_x:   limite inferior em x
-        ub_x:   limite superior em x
-        lb_t:   limite inferior em t
-        ub_t:   limite superior em t
-        ic_fn:  função da CI — recebe x, retorna u(x, 0)
-        bc_fns: dicionário {'left': fn, 'right': fn}
-                cada fn recebe t, retorna u(lb_x ou ub_x, t)
-        device: dispositivo de execução
-
-    Retorna:
-        X_ic:  tensor (N_ic, 2)  — pontos da CI
-        U_ic:  tensor (N_ic, 1)  — valores da CI
-        X_bc:  tensor (2*N_bc, 2) — pontos das CCs
-        U_bc:  tensor (2*N_bc, 1) — valores das CCs
+    Burgers 1D transiente:
+      - CI:  u(x, t_lb) = ic_fn(x)
+      - BCs: u(x_lb, t) e u(x_ub, t)
     """
-
-    # condição inicial — t = 0, x livre
-    x_ic = torch.rand(N_ic, device=device) * (ub_x - lb_x) + lb_x
-    t_ic = torch.zeros(N_ic, device=device)
+    # condição inicial: t = t_lb, x livre
+    x_ic = torch.rand(N_ic, device=device) * (x_ub - x_lb) + x_lb
+    t_ic = torch.full_like(x_ic, t_lb)
 
     X_ic = torch.stack([x_ic, t_ic], dim=1)
     U_ic = ic_fn(x_ic).view(-1, 1)
 
-    # CC esquerda — x = lb_x, t livre
-    t_left = torch.rand(N_bc, device=device) * (ub_t - lb_t) + lb_t
-    X_left = torch.stack([torch.full_like(t_left, lb_x), t_left], dim=1)
+    # contorno esquerdo: x = x_lb, t livre
+    t_left = torch.rand(N_bc, device=device) * (t_ub - t_lb) + t_lb
+    X_left = torch.stack([torch.full_like(t_left, x_lb), t_left], dim=1)
     U_left = bc_fns['left'](t_left).view(-1, 1)
 
-    # CC direita — x = ub_x, t livre
-    t_right = torch.rand(N_bc, device=device) * (ub_t - lb_t) + lb_t
-    X_right = torch.stack([torch.full_like(t_right, ub_x), t_right], dim=1)
+    # contorno direito: x = x_ub, t livre
+    t_right = torch.rand(N_bc, device=device) * (t_ub - t_lb) + t_lb
+    X_right = torch.stack([torch.full_like(t_right, x_ub), t_right], dim=1)
     U_right = bc_fns['right'](t_right).view(-1, 1)
 
     X_bc = torch.cat([X_left, X_right], dim=0)

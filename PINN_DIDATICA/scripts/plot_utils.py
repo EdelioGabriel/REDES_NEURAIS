@@ -4,6 +4,8 @@ plot_utils.py — funções de visualização para notebooks de PINNs.
 Todas as funções recebem arrays numpy prontos — nenhuma dependência de torch,
 modelos ou funções analíticas. A conversão de tensores para arrays é
 responsabilidade do script particular de cada exemplo.
+
+Compatível com problemas estacionários (ex: Laplace) e transientes (ex: Burgers).
 """
 
 import plotly.graph_objects as go
@@ -47,25 +49,27 @@ def _square_axis(title, log=False):
 
 
 # ── 1. Curvas de aprendizado ───────────────────────────────────────────────────
-
 def plot_loss(history):
     """
     Plota as curvas de aprendizado disponíveis no history.
-    Aceita qualquer combinação de: 'loss', 'loss_data', 'loss_pde'
-
+    Aceita qualquer combinação de: 'loss', 'loss_data', 'loss_pde', 'loss_ic'
+ 
     Args:
-        history: dicionário {'loss': [], 'loss_data': [], 'loss_pde': []}
+        history: dicionário com qualquer subconjunto de chaves:
+                 'loss', 'loss_data', 'loss_pde', 'loss_ic'
     """
     labels = {
-        'loss':      ('Total', '#2C3E50', 'solid'),
-        'loss_data': ('Dados', '#E74C3C', 'dash'),
-        'loss_pde':  ('PDE',   '#2980B9', 'dot'),
+        'loss':      ('Total',    '#2C3E50', 'solid'),
+        'loss_pde':  ('PDE',      '#2980B9', 'dot'),
+        'loss_bc':   ('C. Cont.', '#E74C3C', 'dash'),      # condição de contorno
+        'loss_ic':   ('C. Ini.',  '#27AE60', 'dashdot'),   # condição inicial (transiente)
+        'loss_data': ('Dados',    '#8E44AD', 'longdash'),  # dados observados (inverso)
     }
-
+ 
     epochs = list(range(len(next(iter(history.values())))))
-
+ 
     fig = go.Figure()
-
+ 
     for key, (name, color, dash) in labels.items():
         if key in history:
             fig.add_trace(go.Scatter(
@@ -73,7 +77,7 @@ def plot_loss(history):
                 mode='lines', name=name,
                 line=dict(color=color, width=2, dash=dash)
             ))
-
+ 
     fig.update_layout(
         **LAYOUT_BASE,
         title=dict(text="Curvas de aprendizado", font=dict(size=FONT_SIZE + 2)),
@@ -89,36 +93,44 @@ def plot_loss(history):
             borderwidth=1,
         ),
     )
-
+ 
     fig.update_yaxes(
         type="log",
         dtick=1,
         exponentformat="power",
         showexponent="all",
     )
-
+ 
     fig.show()
-
 
 # ── 2. Mapas de calor ─────────────────────────────────────────────────────────
 
-def plot_heatmaps(U_pred, U_ref, x, y, title='Solução', xlabel='x', ylabel='y'):
+def plot_heatmaps(U_pred, U_ref, x, y, title='Solução', xlabel='x', ylabel='y',
+                  square_aspect=None):
     """
     Plota mapas de calor: solução predita, referência e erro absoluto.
 
     Args:
-        U_pred: array (n_grid, n_grid) — solução predita
-        U_ref:  array (n_grid, n_grid) — solução de referência
-        x:      array (n_grid,)        — coordenadas x
-        y:      array (n_grid,)        — coordenadas y
-        title:  título do plot
+        U_pred:        array (n_grid, n_grid) — solução predita
+        U_ref:         array (n_grid, n_grid) — solução de referência
+        x:             array (n_grid,)        — coordenadas x (1ª dimensão do grid)
+        y:             array (n_grid,)        — coordenadas y ou t (2ª dimensão)
+        title:         título do plot
         xlabel:        título do eixo x
-        ylabel:        título do eixo y
+        ylabel:        título do eixo y (use 't' para problemas transientes)
+        square_aspect: força aspecto quadrado nos heatmaps (default: True se
+                       domínio x e y têm o mesmo tamanho, False caso contrário)
     """
     E_abs = np.abs(U_pred - U_ref)
 
     vmin = min(U_pred.min(), U_ref.min())
     vmax = max(U_pred.max(), U_ref.max())
+
+    # Infere aspecto automaticamente se não fornecido
+    if square_aspect is None:
+        x_range = x[-1] - x[0]
+        y_range = y[-1] - y[0]
+        square_aspect = np.isclose(x_range, y_range, rtol=0.05)
 
     fig = make_subplots(
         rows=1, cols=3,
@@ -149,25 +161,33 @@ def plot_heatmaps(U_pred, U_ref, x, y, title='Solução', xlabel='x', ylabel='y'
             colorbar=cbar,
         ), row=1, col=col)
 
+    x_range_plot = [x[0], x[-1]]
+    y_range_plot = [y[0], y[-1]]
+
     for col in [1, 2, 3]:
-        fig.update_xaxes(
+        x_axis_kw = dict(
             **AXIS_COMMON,
             title_text=xlabel,
             title_font=dict(size=FONT_SIZE),
-            range=[0, 1],
+            range=x_range_plot,
             constrain="domain",
             row=1, col=col,
         )
-        fig.update_yaxes(
+        y_axis_kw = dict(
             **AXIS_COMMON,
             title_text=ylabel if col == 1 else "",
             title_font=dict(size=FONT_SIZE),
-            range=[0, 1],
+            range=y_range_plot,
             constrain="domain",
-            scaleanchor=f"x{'' if col == 1 else col}",
-            scaleratio=1,
             row=1, col=col,
         )
+        # Aspecto quadrado apenas quando domínios são compatíveis
+        if square_aspect:
+            y_axis_kw["scaleanchor"] = f"x{'' if col == 1 else col}"
+            y_axis_kw["scaleratio"]  = 1
+
+        fig.update_xaxes(**x_axis_kw)
+        fig.update_yaxes(**y_axis_kw)
 
     fig.update_layout(
         **LAYOUT_BASE,
@@ -184,7 +204,8 @@ def plot_heatmaps(U_pred, U_ref, x, y, title='Solução', xlabel='x', ylabel='y'
 
 # ── 3. Perfis 1D ──────────────────────────────────────────────────────────────
 
-def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D', xlabel='x', ylabel='t', slice_label='t'):
+def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D',
+                  xlabel='x', ylabel='u(x)', slice_label='t', shared_yaxes=False):
     """
     Plota perfis 1D comparando predição vs referência.
 
@@ -196,7 +217,10 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
         title:         título do plot
         xlabel:        título do eixo x
         ylabel:        título do eixo y
-        slice_labels:  título dos slices
+        slice_label:   rótulo do parâmetro de corte ('t' ou 'y')
+        shared_yaxes:  compartilha eixo y entre subplots (default: False)
+                       Use True apenas para campos suaves com escalas similares.
+                       Para Burgers ou choques, mantenha False.
     """
     if slices is None:
         slices = [0.25, 0.5, 0.75]
@@ -207,8 +231,8 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
 
     fig = make_subplots(
         rows=rows, cols=cols,
-        subplot_titles=[f"{slice_label} = {val}" for val in slices],
-        shared_yaxes=True,
+        subplot_titles=[f"{slice_label} = {val:.2f}" for val in slices],
+        shared_yaxes=shared_yaxes,
         horizontal_spacing=0.10,
         vertical_spacing=0.18,
     )
@@ -251,8 +275,8 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
                 row=r, col=c,
             )
 
-    fig_w = SQ_SIZE + 80       if n == 4 else cols * (SQ_SIZE // 2) + 80
-    fig_h = SQ_SIZE + 80       if n == 4 else SQ_SIZE // 2 + 120
+    fig_w = SQ_SIZE + 80 if n == 4 else cols * (SQ_SIZE // 2) + 80
+    fig_h = SQ_SIZE + 80 if n == 4 else SQ_SIZE // 2 + 120
 
     fig.update_layout(
         **LAYOUT_BASE,
@@ -276,62 +300,73 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
 
 # ── 4. Distribuição de pontos ─────────────────────────────────────────────────
 
-def plot_points(X_col, X_bc=None, title='Distribuição dos pontos de amostragem'):
-    """
-    Plota a distribuição dos pontos de colocação e, opcionalmente, de contorno.
-    X_bc é opcional pois a hard-PINN não usa training points.
+def plot_points_stationary(X_col, X_bc=None,
+                          title='Pontos de amostragem (estacionário)'):
 
-    Args:
-        X_col: array (N_c, 2) — pontos de colocação
-        X_bc:  array (N_b, 2) — pontos de contorno (opcional)
-        title: título do plot
-    """
+    def _to_np(arr):
+        if arr is None:
+            return None
+        return arr.detach().cpu().numpy()
 
-    # converte para numpy se necessário
-    if hasattr(X_col, 'detach'):
-        X_col = X_col.detach().cpu().numpy()
-    if X_bc is not None and hasattr(X_bc, 'detach'):
-        X_bc = X_bc.detach().cpu().numpy()
-        
+    X_col = _to_np(X_col)
+    X_bc  = _to_np(X_bc)
+
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=X_col[:, 0], y=X_col[:, 1],
-        mode="markers", name="Colocação",
-        marker=dict(color="#2980B9", size=5, opacity=0.6),
+        mode="markers", name="Colocação"
     ))
 
     if X_bc is not None:
         fig.add_trace(go.Scatter(
             x=X_bc[:, 0], y=X_bc[:, 1],
-            mode="markers", name="Contorno",
-            marker=dict(color="#E74C3C", size=7, symbol="square"),
+            mode="markers", name="Contorno"
         ))
 
     fig.update_layout(
-        **LAYOUT_BASE,
-        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
-        xaxis=dict(
-            **AXIS_COMMON,
-            title=dict(text="x", font=dict(size=FONT_SIZE)),
-            range=[-0.05, 1.05],
-        ),
-        yaxis=dict(
-            **AXIS_COMMON,
-            title=dict(text="y", font=dict(size=FONT_SIZE)),
-            range=[-0.05, 1.05],
-            scaleanchor="x",
-            scaleratio=1,
-        ),
-        width=SQ_SIZE,
-        height=SQ_SIZE,
-        legend=dict(
-            x=1.02, y=1,
-            xanchor="left", yanchor="top",
-            orientation="v",
-            font=dict(size=FONT_SIZE - 1),
-            borderwidth=1,
-        ),
+        title=title,
+        xaxis_title='x',
+        yaxis_title='y'
+    )
+
+    fig.show()
+
+def plot_points_transient(X_col, X_bc=None, X_ic=None,
+                         title='Pontos de amostragem (transiente)'):
+
+    def _to_np(arr):
+        if arr is None:
+            return None
+        return arr.detach().cpu().numpy()
+
+    X_col = _to_np(X_col)
+    X_bc  = _to_np(X_bc)
+    X_ic  = _to_np(X_ic)
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=X_col[:, 0], y=X_col[:, 1],
+        mode="markers", name="Colocação"
+    ))
+
+    if X_bc is not None:
+        fig.add_trace(go.Scatter(
+            x=X_bc[:, 0], y=X_bc[:, 1],
+            mode="markers", name="Contorno"
+        ))
+
+    if X_ic is not None:
+        fig.add_trace(go.Scatter(
+            x=X_ic[:, 0], y=X_ic[:, 1],
+            mode="markers", name="Cond. inicial"
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title='x',
+        yaxis_title='t'
     )
 
     fig.show()
