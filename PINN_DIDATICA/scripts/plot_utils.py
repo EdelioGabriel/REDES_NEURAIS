@@ -300,9 +300,12 @@ def plot_profiles(U_pred_slices, U_ref_slices, x, slices=None, title='Perfis 1D'
 
 # ── 4. Distribuição de pontos ─────────────────────────────────────────────────
 
-def plot_points_stationary(X_col, X_bc=None,
-                          title='Pontos de amostragem (estacionário)'):
-
+def plot_points_stationary(
+    X_col, X_bc=None,
+    title='Distribuição dos pontos (estacionário)',
+    xlabel='x', ylabel='y',
+    square_aspect=None
+):
     def _to_np(arr):
         if arr is None:
             return None
@@ -311,30 +314,76 @@ def plot_points_stationary(X_col, X_bc=None,
     X_col = _to_np(X_col)
     X_bc  = _to_np(X_bc)
 
+    # Range automático
+    all_pts = [X_col]
+    if X_bc is not None:
+        all_pts.append(X_bc)
+    all_pts = np.vstack(all_pts)
+
+    pad = 0.05
+    x_range = [all_pts[:, 0].min() - pad, all_pts[:, 0].max() + pad]
+    y_range = [all_pts[:, 1].min() - pad, all_pts[:, 1].max() + pad]
+
+    # Aspecto automático
+    if square_aspect is None:
+        x_size = x_range[1] - x_range[0]
+        y_size = y_range[1] - y_range[0]
+        square_aspect = np.isclose(x_size, y_size, rtol=0.05)
+
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=X_col[:, 0], y=X_col[:, 1],
-        mode="markers", name="Colocação"
+        mode="markers",
+        name="Colocação",
+        marker=dict(size=5, opacity=0.6),
     ))
 
     if X_bc is not None:
         fig.add_trace(go.Scatter(
             x=X_bc[:, 0], y=X_bc[:, 1],
-            mode="markers", name="Contorno"
+            mode="markers",
+            name="Contorno",
+            marker=dict(size=7, symbol="square"),
         ))
 
+    yaxis_kw = dict(
+        **AXIS_COMMON,
+        title=dict(text=ylabel, font=dict(size=FONT_SIZE)),
+        range=y_range,
+    )
+
+    if square_aspect:
+        yaxis_kw["scaleanchor"] = "x"
+        yaxis_kw["scaleratio"] = 1
+
     fig.update_layout(
-        title=title,
-        xaxis_title='x',
-        yaxis_title='y'
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        xaxis=dict(
+            **AXIS_COMMON,
+            title=dict(text=xlabel, font=dict(size=FONT_SIZE)),
+            range=x_range,
+        ),
+        yaxis=yaxis_kw,
+        height=450,
+        width=700,
+        legend=dict(
+            x=1.02, y=1,
+            xanchor="left", yanchor="top",
+            font=dict(size=FONT_SIZE - 1),
+            borderwidth=1,
+        ),
     )
 
     fig.show()
 
-def plot_points_transient(X_col, X_bc=None, X_ic=None,
-                         title='Pontos de amostragem (transiente)'):
-
+def plot_points_transient(
+    X_col, X_bc=None, X_ic=None,
+    title='Distribuição dos pontos (transiente)',
+    xlabel='t', ylabel='x',
+    square_aspect=None
+):
     def _to_np(arr):
         if arr is None:
             return None
@@ -344,29 +393,187 @@ def plot_points_transient(X_col, X_bc=None, X_ic=None,
     X_bc  = _to_np(X_bc)
     X_ic  = _to_np(X_ic)
 
+    # Range automático
+    all_pts = [X_col]
+    if X_bc is not None:
+        all_pts.append(X_bc)
+    if X_ic is not None:
+        all_pts.append(X_ic)
+    all_pts = np.vstack(all_pts)
+
+    pad = 0.05
+    x_range = [all_pts[:, 0].min() - pad, all_pts[:, 0].max() + pad]
+    y_range = [all_pts[:, 1].min() - pad, all_pts[:, 1].max() + pad]
+
+    # Aspecto automático (igual ao heatmap)
+    if square_aspect is None:
+        x_size = x_range[1] - x_range[0]
+        y_size = y_range[1] - y_range[0]
+        square_aspect = np.isclose(x_size, y_size, rtol=0.05)
+
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
-        x=X_col[:, 0], y=X_col[:, 1],
-        mode="markers", name="Colocação"
+        x=X_col[:, 1], y=X_col[:, 0],
+        mode="markers",
+        name="Colocação",
+        marker=dict(size=5, opacity=0.6),
     ))
 
     if X_bc is not None:
         fig.add_trace(go.Scatter(
-            x=X_bc[:, 0], y=X_bc[:, 1],
-            mode="markers", name="Contorno"
+            x=X_bc[:, 1], y=X_bc[:, 0],
+            mode="markers",
+            name="Contorno",
+            marker=dict(size=7, symbol="square"),
         ))
 
     if X_ic is not None:
         fig.add_trace(go.Scatter(
-            x=X_ic[:, 0], y=X_ic[:, 1],
-            mode="markers", name="Cond. inicial"
+            x=X_ic[:, 1], y=X_ic[:, 0],
+            mode="markers",
+            name="Cond. inicial",
+            marker=dict(size=7, symbol="diamond"),
         ))
 
+    yaxis_kw = dict(
+        **AXIS_COMMON,
+        title=dict(text=ylabel, font=dict(size=FONT_SIZE)),
+        range=y_range,
+    )
+
+    if square_aspect:
+        yaxis_kw["scaleanchor"] = "x"
+        yaxis_kw["scaleratio"] = 1
+
     fig.update_layout(
-        title=title,
-        xaxis_title='x',
-        yaxis_title='t'
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        xaxis=dict(
+            **AXIS_COMMON,
+            title=dict(text=xlabel, font=dict(size=FONT_SIZE)),
+            range=x_range,
+        ),
+        yaxis=yaxis_kw,
+        height=450,
+        width=700,
+        legend=dict(
+            x=1.02, y=1,
+            xanchor="left", yanchor="top",
+            font=dict(size=FONT_SIZE - 1),
+            borderwidth=1,
+        ),
+    )
+
+    fig.show()
+
+def plot_psi0_evolution(history, psi0_true, title='Evolução de ψ₀'):
+    """
+    Plota a evolução do potencial de superfície durante o treinamento.
+
+    Args:
+        history:   dicionário com 'psi0' — lista de valores por época
+        psi0_true: valor verdadeiro de psi0
+        title:     título do plot
+    """
+    epochs = list(range(len(history['psi0'])))
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=epochs, y=history['psi0'],
+        mode='lines', name='ψ₀ recuperado',
+        line=dict(color='#2C3E50', width=2)
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=[epochs[0], epochs[-1]],
+        y=[psi0_true, psi0_true],
+        mode='lines', name='ψ₀ verdadeiro',
+        line=dict(color='#E74C3C', width=2, dash='dash')
+    ))
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        xaxis=_square_axis('Época'),
+        yaxis=_square_axis('ψ₀'),
+        width=SQ_SIZE,
+        height=SQ_SIZE,
+        legend=dict(
+            x=1.02, y=1,
+            xanchor='left', yanchor='top',
+            orientation='v',
+            font=dict(size=FONT_SIZE - 1),
+            borderwidth=1,
+        ),
+    )
+
+    fig.show()
+
+
+def plot_pb(results, X_obs, Psi_obs, title='Equação de Poisson-Boltzmann'):
+    """
+    Plota a solução da PINN, a solução exata e a curva recuperada,
+    junto com os dados de observação ruidosos.
+
+    Args:
+        results:  dicionário retornado por evaluate_pb
+        X_obs:    tensor (N_obs, 1) — posições das observações
+        Psi_obs:  tensor (N_obs, 1) — potencial ruidoso
+        title:    título do plot
+    """
+    X_obs_np   = X_obs.detach().cpu().numpy().ravel()
+    Psi_obs_np = Psi_obs.detach().cpu().numpy().ravel()
+
+    fig = go.Figure()
+
+    # dados ruidosos
+    fig.add_trace(go.Scatter(
+        x=X_obs_np, y=Psi_obs_np,
+        mode='markers', name='Observações',
+        marker=dict(color='#2C3E50', size=7, symbol='circle-open')
+    ))
+
+    # solução exata
+    fig.add_trace(go.Scatter(
+        x=results['x'], y=results['psi_exact'],
+        mode='lines', name=f"Exata (ψ₀={results['psi0_true']:.3f})",
+        line=dict(color='#E74C3C', width=2, dash='dash')
+    ))
+
+    # curva recuperada
+    fig.add_trace(go.Scatter(
+        x=results['x'], y=results['psi_recovered'],
+        mode='lines', name=f"Recuperada (ψ₀={results['psi0_pred']:.3f})",
+        line=dict(color='#2980B9', width=2, dash='dot')
+    ))
+
+    # predição da rede
+    fig.add_trace(go.Scatter(
+        x=results['x'], y=results['psi_pred'],
+        mode='lines', name='PINN',
+        line=dict(color='#27AE60', width=2)
+    ))
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(
+            text=f"{title}<br><sup>Erro em ψ₀: {results['error_pct']:.2f}% | "
+                 f"Erro L2: {results['l2_error']:.2e}</sup>",
+            font=dict(size=FONT_SIZE + 2)
+        ),
+        xaxis=_square_axis('x (comprimentos de Debye)'),
+        yaxis=_square_axis('ψ(x)'),
+        width=SQ_SIZE,
+        height=SQ_SIZE,
+        legend=dict(
+            x=1.02, y=1,
+            xanchor='left', yanchor='top',
+            orientation='v',
+            font=dict(size=FONT_SIZE - 1),
+            borderwidth=1,
+        ),
     )
 
     fig.show()
