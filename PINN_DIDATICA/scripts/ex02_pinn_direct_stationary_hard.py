@@ -8,7 +8,7 @@ A solução analítica é particular para o problema introduzido no notebook 01_
 
 import torch
 import numpy as np
-from geral_functions import sample_collocation
+from geral_functions import sample_collocation_rectangular
 
 # Definindo a função de tentativa, com o acréscimo das funções auxiliares à saída bruta da rede
 def trial_solution(model, X):
@@ -103,7 +103,7 @@ def train_hard(model, optimizer, N_colloc, lb, ub, n_epochs, device='cpu'):
 
         optimizer.zero_grad()
 
-        X_col = sample_collocation(N_colloc, lb, ub, device)
+        X_col = sample_collocation_rectangular(N_colloc, lb, ub, device)
 
         loss_pde = loss_fn_hard(model, X_col)
 

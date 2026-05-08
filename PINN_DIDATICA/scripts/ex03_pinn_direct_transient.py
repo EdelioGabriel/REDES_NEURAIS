@@ -147,51 +147,64 @@ def train_burgers(model, optimizer, X_col, X_ic, U_ic, X_bc, U_bc,
     return history
 
 def numerical_solution_burgers(nu=0.01/np.pi, nx=256, nt=100):
-    """
-    Solução numérica da equação de Burgers 1D via método das linhas.
-    Usada como referência de validação da PINN.
-
-    Nota: Raissi et al. (2019) utilizam uma solução de referência
-    pré-computada disponível no repositório original. Aqui adotamos
-    o método das linhas com RK45, que produz resultados equivalentes
-    para os parâmetros considerados.
-
-    ...
-    """
-    x= np.linspace(-1, 1, nx)
-    t = np.linspace(0, 1, nt)
+    x = np.linspace(-1.0, 1.0, nx)
+    t = np.linspace(0.0, 1.0, nt)
     dx = x[1] - x[0]
 
+    # condição inicial
     u0 = -np.sin(np.pi * x)
+    u0[0] = 0.0
+    u0[-1] = 0.0
 
     def rhs(t, u):
-        u_x = np.zeros_like(u)
-        u_xx = np.zeros_like(u)
+        u = u.copy()
 
-        u_x[1:-1]  = (u[2:] - u[:-2]) / (2 * dx)
-        u_xx[1:-1] = (u[2:] - 2*u[1:-1] + u[:-2]) / dx**2
+        # Dirichlet homogênea
+        u[0] = 0.0
+        u[-1] = 0.0
 
-        dudt = -u * u_x + nu * u_xx
-        dudt[0]  = 0
-        dudt[-1] = 0
+        # Fluxo convectivo conservativo: f(u) = u^2/2
+        f = 0.5 * u**2
+
+        # Fluxo numérico local Lax-Friedrichs / Rusanov
+        # f_hat_{i+1/2} = 0.5(f_i + f_{i+1}) - 0.5 a_{i+1/2}(u_{i+1} - u_i)
+        a = np.maximum(np.abs(u[:-1]), np.abs(u[1:]))
+        f_hat = 0.5 * (f[:-1] + f[1:]) - 0.5 * a * (u[1:] - u[:-1])
+
+        dudt = np.zeros_like(u)
+
+        # derivada espacial do termo convectivo
+        dudt[1:-1] += -(f_hat[1:] - f_hat[:-1]) / dx
+
+        # termo difusivo central
+        dudt[1:-1] += nu * (u[2:] - 2.0 * u[1:-1] + u[:-2]) / dx**2
+
+        # mantém as bordas fixas
+        dudt[0] = 0.0
+        dudt[-1] = 0.0
 
         return dudt
-    
+
+    # Limita o passo interno para não perder a dinâmica espacial
+    u_max = np.max(np.abs(u0)) + 1e-12
+    max_step = 0.5 * dx / u_max
+
     sol = solve_ivp(
         rhs,
-        t_span=(0, 1),
+        t_span=(0.0, 1.0),
         y0=u0,
-        t_eval=t,          # ← força os instantes de saída
-        method='RK45',
+        t_eval=t,
+        method="BDF",
         rtol=1e-6,
         atol=1e-8,
-        dense_output=True  # ← garante interpolação contínua
+        max_step=max_step,
     )
 
-    # interpola para garantir exatamente nt pontos
-    U = sol.sol(t)  # avalia a solução densa nos instantes pedidos
+    if not sol.success:
+        raise RuntimeError(f"solve_ivp falhou: {sol.message}")
 
-    return x, t, U  # shape garantido: (nx, nt)
+    U = sol.y  # shape: (nx, nt)
+    return x, t, U
 
 def evaluate_burgers(model, x_ref, t_ref, U_ref, device, snapshots=None):
     """
