@@ -577,3 +577,107 @@ def plot_pb(results, X_obs, Psi_obs, title='Equação de Poisson-Boltzmann'):
     )
 
     fig.show()
+
+def plot_D_evolution(history, D_true, title='Evolução de D'):
+    """
+    Plota a evolução do coeficiente de difusão durante o treinamento.
+
+    Args:
+        history: dicionário com 'D' — lista de valores por época
+        D_true:  valor verdadeiro de D
+        title:   título do plot
+    """
+    epochs = list(range(len(history['D'])))
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=epochs, y=history['D'],
+        mode='lines', name='D recuperado',
+        line=dict(color='#2C3E50', width=2)
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=[epochs[0], epochs[-1]],
+        y=[D_true, D_true],
+        mode='lines', name='D verdadeiro',
+        line=dict(color='#E74C3C', width=2, dash='dash')
+    ))
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        xaxis=_square_axis('Época'),
+        yaxis=_square_axis('D'),
+        width=SQ_SIZE,
+        height=SQ_SIZE,
+        legend=dict(
+            x=1.02, y=1,
+            xanchor='left', yanchor='top',
+            orientation='v',
+            font=dict(size=FONT_SIZE - 1),
+            borderwidth=1,
+        ),
+    )
+
+    fig.show()
+
+
+def plot_diffusion_snapshots(results, title='Difusão 2D'):
+    """
+    Plota snapshots temporais da solução predita vs referência.
+
+    Args:
+        results: dicionário retornado por evaluate_diffusion
+        title:   título do plot
+    """
+    n_snaps = len(results['snap_times'])
+    x = results['x']
+    y = results['y']
+
+    fig = make_subplots(
+        rows=2, cols=n_snaps,
+        subplot_titles=[f"Predição t={t:.2f}" for t in results['snap_times']] +
+                       [f"Referência t={t:.2f}" for t in results['snap_times']],
+        horizontal_spacing=0.08,
+        vertical_spacing=0.12,
+    )
+
+    vmin = min(np.min(results['C_ref_snaps']), np.min(results['C_pred_snaps']))
+    vmax = max(np.max(results['C_ref_snaps']), np.max(results['C_pred_snaps']))
+
+    for col, (C_pred, C_ref) in enumerate(
+        zip(results['C_pred_snaps'], results['C_ref_snaps']), start=1
+    ):
+        fig.add_trace(go.Heatmap(
+            z=C_pred, x=x, y=y,
+            colorscale=COLORSCALE,
+            zmin=vmin, zmax=vmax,
+            showscale=(col == n_snaps),
+            colorbar=dict(x=1.02, len=0.45, y=0.75, thickness=12),
+        ), row=1, col=col)
+
+        fig.add_trace(go.Heatmap(
+            z=C_ref, x=x, y=y,
+            colorscale=COLORSCALE,
+            zmin=vmin, zmax=vmax,
+            showscale=(col == n_snaps),
+            colorbar=dict(x=1.02, len=0.45, y=0.25, thickness=12),
+        ), row=2, col=col)
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(
+            text=f"{title}<br><sup>D recuperado: {results['D_pred']:.4f} | "
+                 f"D verdadeiro: {results['D_true']:.4f} | "
+                 f"Erro: {results['error_pct']:.2f}%</sup>",
+            font=dict(size=FONT_SIZE + 2)
+        ),
+        height=700,
+        width=300 * n_snaps + 100,
+    )
+
+    for ann in fig.layout.annotations:
+        ann.font = dict(size=FONT_SIZE - 2)
+
+    fig.show()

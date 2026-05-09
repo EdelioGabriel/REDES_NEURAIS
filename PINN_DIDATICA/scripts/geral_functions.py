@@ -150,3 +150,66 @@ def sample_boundary_rectangular_transient(
     U_bc = torch.cat([U_left, U_right], dim=0)
 
     return X_ic, U_ic, X_bc, U_bc
+
+def sample_boundary_rectangular_transient_2d(N_ic, N_bc, lb_x, ub_x,
+                                              lb_y, ub_y, lb_t, ub_t,
+                                              ic_fn, device):
+    """
+    Amostra pontos de CI e CCs para problemas transientes 2D.
+
+    A entrada da rede é (x, y, t) — shape (N, 3).
+
+    Args:
+        N_ic:   número de pontos na CI
+        N_bc:   número de pontos por face espacial
+        lb_x:   limite inferior em x
+        ub_x:   limite superior em x
+        lb_y:   limite inferior em y
+        ub_y:   limite superior em y
+        lb_t:   limite inferior em t
+        ub_t:   limite superior em t
+        ic_fn:  função da CI — recebe (x, y) tensores 1D, retorna c(x,y,0)
+        device: dispositivo de execução
+
+    Retorna:
+        X_ic:  tensor (N_ic, 3)  — pontos da CI
+        C_ic:  tensor (N_ic, 1)  — valores da CI
+        X_bc:  tensor (4*N_bc, 3) — pontos das CCs
+        C_bc:  tensor (4*N_bc, 1) — valores das CCs (zeros)
+    """
+    # ── CI — t=0, (x,y) livres ────────────────────────────────────────────────
+    x_ic = torch.rand(N_ic, device=device) * (ub_x - lb_x) + lb_x
+    y_ic = torch.rand(N_ic, device=device) * (ub_y - lb_y) + lb_y
+    t_ic = torch.zeros(N_ic, device=device)
+
+    X_ic = torch.stack([x_ic, y_ic, t_ic], dim=1)
+    C_ic = ic_fn(x_ic, y_ic).view(-1, 1)
+
+    # ── CCs — quatro faces espaciais, t livre ─────────────────────────────────
+    t_bc = torch.rand(N_bc, device=device) * (ub_t - lb_t) + lb_t
+    s_bc = torch.rand(N_bc, device=device)
+
+    # face x=lb_x
+    x_left = torch.full_like(t_bc, lb_x)
+    y_left = s_bc * (ub_y - lb_y) + lb_y
+    X_left = torch.stack([x_left, y_left, t_bc], dim=1)
+
+    # face x=ub_x
+    x_right = torch.full_like(t_bc, ub_x)
+    y_right = s_bc * (ub_y - lb_y) + lb_y
+    X_right = torch.stack([x_right, y_right, t_bc], dim=1)
+
+    # face y=lb_y
+    x_bot = s_bc * (ub_x - lb_x) + lb_x
+    y_bot = torch.full_like(t_bc, lb_y)
+    X_bot = torch.stack([x_bot, y_bot, t_bc], dim=1)
+
+    # face y=ub_y
+    x_top = s_bc * (ub_x - lb_x) + lb_x
+    y_top = torch.full_like(t_bc, ub_y)
+    X_top = torch.stack([x_top, y_top, t_bc], dim=1)
+
+    X_bc = torch.cat([X_left, X_right, X_bot, X_top], dim=0)
+    C_bc = torch.zeros(4 * N_bc, 1, device=device)
+
+    return X_ic, C_ic, X_bc, C_bc
