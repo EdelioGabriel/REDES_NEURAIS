@@ -213,3 +213,52 @@ def sample_boundary_rectangular_transient_2d(N_ic, N_bc, lb_x, ub_x,
     C_bc = torch.zeros(4 * N_bc, 1, device=device)
 
     return X_ic, C_ic, X_bc, C_bc
+
+# ------------------------------------------------------------
+# Adaptações para o domínio L-shape
+# Complemente seu geral_functions.py com essas duas funções
+# ------------------------------------------------------------
+
+def sample_collocation_lshape(N_c, device):
+    """
+    Amostra N_c pontos no interior do L-shape [0,1]² \ [0.5,1]²
+    usando rejeição. Substitui sample_collocation_rectangular
+    para esse domínio específico.
+    """
+    pts = []
+    while len(pts) == 0 or sum(p.shape[0] for p in pts) < N_c:
+        xy = torch.rand(N_c * 2, 2, device=device)
+        mask = ~((xy[:, 0] > 0.5) & (xy[:, 1] > 0.5))
+        pts.append(xy[mask])
+    X = torch.cat(pts, dim=0)[:N_c]
+    X.requires_grad_(True)
+    return X
+
+
+def sample_boundary_lshape(N_b, device):
+    """
+    Amostra N_b pontos por segmento na fronteira do L-shape.
+    O L-shape tem 6 segmentos — retorna todos concatenados
+    com u = 0 (Dirichlet homogêneo).
+
+    Segmentos (sentido anti-horário):
+        1: base     (0,0) → (1,0)
+        2: direita  (1,0) → (1,0.5)
+        3: degrau h (1,0.5) → (0.5,0.5)
+        4: degrau v (0.5,0.5) → (0.5,1)
+        5: topo     (0.5,1) → (0,1)
+        6: esquerda (0,1) → (0,0)
+    """
+    t = torch.rand(N_b, device=device)
+
+    seg1 = torch.stack([t,                        torch.zeros_like(t)], dim=1)
+    seg2 = torch.stack([torch.ones_like(t),        t * 0.5],             dim=1)
+    seg3 = torch.stack([1.0 - t * 0.5,            torch.full_like(t, 0.5)], dim=1)
+    seg4 = torch.stack([torch.full_like(t, 0.5),  0.5 + t * 0.5],       dim=1)
+    seg5 = torch.stack([0.5 - t * 0.5,            torch.ones_like(t)],   dim=1)
+    seg6 = torch.stack([torch.zeros_like(t),       1.0 - t],             dim=1)
+
+    X_bc = torch.cat([seg1, seg2, seg3, seg4, seg5, seg6], dim=0)
+    U_bc = torch.zeros(X_bc.shape[0], 1, device=device)
+
+    return X_bc, U_bc
