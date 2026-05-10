@@ -1,4 +1,22 @@
-venv/
-__pycache__/
-*.pyc
+# Logs
+logs/
+*.log
+
+# Modelos
+*.pt
+
+# Bancos locais
+*.db
+
+# Shell temporário
+*.sh
+
+# Imagens geradas
+*.png
+
+# Jupyter
 .ipynb_checkpoints/
+
+# Outros
+*.pyc
+*.py
