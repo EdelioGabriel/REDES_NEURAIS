@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 """
 plot_utils.py — funções de visualização para notebooks de PINNs.
 
@@ -1029,4 +1027,3 @@ def plot_l2_comparison(results_list, labels, title='Erro L² por estratégia de 
     fig.show()
 
 #
->>>>>>> 1d0c242cdd2dca87cd80e699718fd3232ff19933

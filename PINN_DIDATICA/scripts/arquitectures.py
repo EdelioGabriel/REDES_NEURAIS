@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 """
 arquitectures.py
 
@@ -85,4 +83,3 @@ class ResNetPINN(nn.Module):
         X = self.res_blocks(X)
         return self.output_layer(X)
 #
->>>>>>> 1d0c242cdd2dca87cd80e699718fd3232ff19933
