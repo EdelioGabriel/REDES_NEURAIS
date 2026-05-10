@@ -681,3 +681,111 @@ def plot_diffusion_snapshots(results, title='Difusão 2D'):
         ann.font = dict(size=FONT_SIZE - 2)
 
     fig.show()
+
+def plot_campo_2d(U, mask, title="Campo u(x,y)", H=64, W=64):
+    """
+    Plota o campo u no domínio L-shape usando heatmap do Plotly.
+    Pontos fora do domínio aparecem em branco (None).
+    """
+    x1d = np.linspace(0, 1, W)
+    y1d = np.linspace(0, 1, H)
+
+    # substitui fora do domínio por None
+    U_plot = np.where(mask.cpu().numpy(), U, np.nan)
+
+    fig = go.Figure(go.Heatmap(
+        z=U_plot,
+        x=x1d,
+        y=y1d,
+        colorscale=COLORSCALE,
+        colorbar=dict(title=dict(text="u(x,y)", font=dict(size=FONT_SIZE))
+),
+    ))
+
+    fig.update_xaxes(title_text="x", **AXIS_COMMON)
+    fig.update_yaxes(title_text="y", **AXIS_COMMON)
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        height=SQ_SIZE,
+        width=SQ_SIZE,
+    )
+    fig.show()
+
+
+def plot_loss_comparacao(historico_mlp, historico_geo,
+                         title="Comparação de treinamento"):
+    """
+    Plota curvas de loss (total e PDE) do MLP e PhyGeoNet lado a lado.
+    """
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=("Loss total", "Loss PDE"),
+    )
+
+    # loss total
+    fig.add_trace(go.Scatter(
+        y=historico_mlp["loss"], name="MLP",
+        line=dict(color=COLORS[0], width=2)),
+        row=1, col=1)
+    fig.add_trace(go.Scatter(
+        y=historico_geo["total"], name="PhyGeoNet",
+        line=dict(color=COLORS[1], width=2)),
+        row=1, col=1)
+
+    # loss PDE
+    fig.add_trace(go.Scatter(
+        y=historico_mlp["loss_pde"], name="MLP",
+        line=dict(color=COLORS[0], width=2, dash="dash"),
+        showlegend=False),
+        row=1, col=2)
+    fig.add_trace(go.Scatter(
+        y=historico_geo["pde"], name="PhyGeoNet",
+        line=dict(color=COLORS[1], width=2, dash="dash"),
+        showlegend=False),
+        row=1, col=2)
+
+    for col in [1, 2]:
+        fig.update_xaxes(title_text="Época", row=1, col=col, **AXIS_COMMON)
+        fig.update_yaxes(title_text="Loss",  row=1, col=col,
+                         type="log", **AXIS_COMMON)
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        height=450,
+        width=1000,
+    )
+
+    for ann in fig.layout.annotations:
+        ann.font = dict(size=FONT_SIZE)
+
+    fig.show()
+
+
+def plot_residuo_scatter(X_val, residuo, title="Resíduo |−∇²u − 1|"):
+    """
+    Plota o resíduo pontual do MLP como scatter no domínio L-shape.
+    Útil para identificar onde o MLP erra mais.
+    """
+    fig = go.Figure(go.Scatter(
+        x=X_val[:, 0].cpu().detach().numpy(),
+        y=X_val[:, 1].cpu().detach().numpy(),
+        mode="markers",
+        marker=dict(
+            color=residuo,
+            colorscale=COLORSCALE,
+            size=4,
+            colorbar=dict(title=dict(text="|resíduo|", font=dict(size=FONT_SIZE))),
+        ),
+    ))
+
+    fig.update_xaxes(title_text="x", range=[-0.02, 1.02], **AXIS_COMMON)
+    fig.update_yaxes(title_text="y", range=[-0.02, 1.02], **AXIS_COMMON)
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        height=SQ_SIZE,
+        width=SQ_SIZE,
+    )
+    fig.show()
