@@ -89,44 +89,94 @@ def numerical_solution_diffusion_2d(D, nx=50, ny=50, nt_out=25,
 
 # ── Dados sintéticos ───────────────────────────────────────────────────────────
 
-def generate_synthetic_data_diffusion(C_ref, x, y, t, N_obs, noise_amp,
-                                       device, seed=42):
+def generate_synthetic_data_diffusion(
+    D_true,
+    N_obs,
+    noise_amp,
+    device,
+    seed=42,
+    nx=50,
+    ny=50,
+    nt_out=25,
+    sigma=0.1,
+    x0=0.5,
+    y0=0.5
+):
     """
-    Gera dados sintéticos ruidosos a partir da solução numérica.
+    Gera dados sintéticos ruidosos a partir da solução numérica
+    da equação de difusão 2D.
 
     Args:
-        C_ref:     array (nx, ny, nt) — solução numérica de referência
-        x:         array (nx,)
-        y:         array (ny,)
-        t:         array (nt,)
-        N_obs:     número de pontos de observação
+        D_true:    coeficiente de difusão verdadeiro
+        N_obs:     número de observações
         noise_amp: amplitude do ruído gaussiano
-        device:    dispositivo de execução
-        seed:      semente para reprodutibilidade
+        device:    dispositivo
+        seed:      semente aleatória
+
+        Parâmetros do solver:
+        nx, ny:    discretização espacial
+        nt_out:    número de saídas temporais
+        sigma:     largura da gaussiana inicial
+        x0, y0:    centro da gaussiana
 
     Retorna:
-        X_obs: tensor (N_obs, 3) — posições (x, y, t)
-        C_obs: tensor (N_obs, 1) — concentração ruidosa
+        X_obs: tensor (N_obs, 3) -> (x, y, t)
+        C_obs: tensor (N_obs, 1) -> concentração ruidosa
     """
+
     np.random.seed(seed)
 
-    nx, ny, nt = C_ref.shape
+    # --------------------------------------------------------
+    # Gera solução numérica internamente
+    # --------------------------------------------------------
 
-    # amostragem aleatória de índices
-    ix = np.random.randint(1, nx-1, N_obs)
-    iy = np.random.randint(1, ny-1, N_obs)
-    it = np.random.randint(0, nt,   N_obs)
+    x, y, t, C_ref = numerical_solution_diffusion_2d(
+        D=D_true,
+        nx=nx,
+        ny=ny,
+        nt_out=nt_out,
+        sigma=sigma,
+        x0=x0,
+        y0=y0
+    )
+
+    nx_ref, ny_ref, nt_ref = C_ref.shape
+
+    # --------------------------------------------------------
+    # Amostragem aleatória
+    # --------------------------------------------------------
+
+    ix = np.random.randint(1, nx_ref - 1, N_obs)
+    iy = np.random.randint(1, ny_ref - 1, N_obs)
+    it = np.random.randint(0, nt_ref,     N_obs)
 
     x_obs = x[ix]
     y_obs = y[iy]
     t_obs = t[it]
-    c_obs = C_ref[ix, iy, it] + np.random.normal(0, noise_amp, N_obs)
+
+    c_exact = C_ref[ix, iy, it]
+
+    # --------------------------------------------------------
+    # Adiciona ruído
+    # --------------------------------------------------------
+
+    c_noisy = c_exact + np.random.normal(0, noise_amp, N_obs)
+
+    # --------------------------------------------------------
+    # Tensores
+    # --------------------------------------------------------
 
     X_obs = torch.tensor(
         np.stack([x_obs, y_obs, t_obs], axis=1),
-        dtype=torch.float32, device=device
+        dtype=torch.float32,
+        device=device
     )
-    C_obs = torch.tensor(c_obs, dtype=torch.float32, device=device).view(-1, 1)
+
+    C_obs = torch.tensor(
+        c_noisy,
+        dtype=torch.float32,
+        device=device
+    ).view(-1, 1)
 
     return X_obs, C_obs
 
@@ -293,38 +343,93 @@ def train_diffusion(model, D, optimizer, X_col, X_ic, C_ic, X_bc, C_bc,
 
 # ── Avaliação ──────────────────────────────────────────────────────────────────
 
-def evaluate_diffusion(model, D, D_true, C_ref, x, y, t, device,
-                       snapshots=None):
+def evaluate_diffusion(model, D, D_true, device,
+                       snapshots=None,
+                       nx=50, ny=50, nt_out=25,
+                       sigma=0.1, x0=0.5, y0=0.5):
     """
-    Avalia o modelo treinado e retorna arrays prontos para plotagem.
+    Avalia o modelo treinado comparando a predição da PINN com a
+    solução numérica de referência da equação de difusão 2D.
+
+    A solução numérica é gerada internamente via diferenças finitas
+    explícitas.
 
     Args:
         model:     rede neural treinada
         D:         parâmetro recuperado (nn.Parameter)
-        D_true:    valor verdadeiro de D
-        C_ref:     array (nx, ny, nt) — solução numérica de referência
-        x:         array (nx,)
-        y:         array (ny,)
-        t:         array (nt,)
+        D_true:    valor verdadeiro do coeficiente de difusão
         device:    dispositivo de execução
-        snapshots: índices de instantes para visualização (default: [0, 12, 24])
 
-    Retorna dicionário com:
-        'x':            array (nx,)
-        'y':            array (ny,)
-        't':            array (nt,)
-        'C_pred_snaps': lista de arrays (nx, ny)
-        'C_ref_snaps':  lista de arrays (nx, ny)
-        'snap_times':   lista de floats
-        'D_pred':       float
-        'D_true':       float
-        'error_pct':    float
-        'l2_error':     float
+        snapshots:
+            lista de índices temporais usados para visualização.
+            Default: [0, nt_out//2, nt_out-1]
+
+        Parâmetros do solver numérico:
+            nx:     número de pontos em x
+            ny:     número de pontos em y
+            nt_out: número de snapshots temporais
+            sigma:  largura da gaussiana inicial
+            x0:     centro da gaussiana em x
+            y0:     centro da gaussiana em y
+
+    Retorna:
+        dict contendo:
+
+        'x':
+            array (nx,) com coordenadas espaciais em x
+
+        'y':
+            array (ny,) com coordenadas espaciais em y
+
+        't':
+            array (nt_out,) com instantes de tempo
+
+        'C_pred_snaps':
+            lista de arrays (nx, ny) contendo as predições da PINN
+
+        'C_ref_snaps':
+            lista de arrays (nx, ny) contendo a solução numérica
+            de referência
+
+        'snap_times':
+            lista dos tempos associados aos snapshots
+
+        'D_pred':
+            valor recuperado pela PINN
+
+        'D_true':
+            valor verdadeiro do coeficiente de difusão
+
+        'error_pct':
+            erro relativo percentual de D
+
+        'l2_error':
+            erro relativo L2 entre solução prevista e referência
     """
+
+    # ------------------------------------------------------------------
+    # Gera solução numérica de referência internamente
+    # ------------------------------------------------------------------
+
+    x, y, t, C_ref = numerical_solution_diffusion_2d(
+        D=D_true,
+        nx=nx,
+        ny=ny,
+        nt_out=nt_out,
+        sigma=sigma,
+        x0=x0,
+        y0=y0
+    )
+
+    # ------------------------------------------------------------------
+    # Snapshots
+    # ------------------------------------------------------------------
+
     if snapshots is None:
         snapshots = [0, len(t)//2, len(t)-1]
 
-    nx, ny = len(x), len(y)
+    nx_ref, ny_ref = len(x), len(y)
+
     X_grid, Y_grid = np.meshgrid(x, y, indexing='ij')
 
     C_pred_snaps = []
@@ -332,27 +437,43 @@ def evaluate_diffusion(model, D, D_true, C_ref, x, y, t, device,
     snap_times   = []
 
     for idx in snapshots:
+
         t_snap = t[idx]
+
         T_grid = np.full_like(X_grid, t_snap)
 
         X_flat = torch.tensor(
-            np.stack([X_grid.ravel(), Y_grid.ravel(), T_grid.ravel()], axis=1),
-            dtype=torch.float32, device=device
+            np.stack([
+                X_grid.ravel(),
+                Y_grid.ravel(),
+                T_grid.ravel()
+            ], axis=1),
+            dtype=torch.float32,
+            device=device
         )
 
         with torch.no_grad():
-            C_pred = model(X_flat).cpu().numpy().reshape(nx, ny)
+            C_pred = model(X_flat).cpu().numpy().reshape(nx_ref, ny_ref)
 
         C_pred_snaps.append(C_pred)
         C_ref_snaps.append(C_ref[:, :, idx])
         snap_times.append(t_snap)
 
-    # métricas globais
-    D_pred    = D.item()
+    # ------------------------------------------------------------------
+    # Métricas
+    # ------------------------------------------------------------------
+
+    D_pred = D.item()
+
     error_pct = np.abs(D_pred - D_true) / D_true * 100
-    l2_error  = np.linalg.norm(
+
+    l2_error = np.linalg.norm(
         np.array(C_pred_snaps) - np.array(C_ref_snaps)
     ) / np.linalg.norm(np.array(C_ref_snaps))
+
+    # ------------------------------------------------------------------
+    # Retorno
+    # ------------------------------------------------------------------
 
     return {
         'x':            x,
