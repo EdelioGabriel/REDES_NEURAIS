@@ -63,7 +63,7 @@ def analytical_solution_helmholtz(X):
 
 # ── Estratégias de amostragem ──────────────────────────────────────────────────
 
-def sample_uniform(N, device):
+def sample_uniform(N, device, seed=None):
     """
     Amostragem uniforme — grade regular no domínio.
 
@@ -87,7 +87,7 @@ def sample_uniform(N, device):
     return X_col
 
 
-def sample_random(N, device):
+def sample_random(N, device, seed=None):
     """
     Amostragem aleatória — pontos sorteados uniformemente no domínio.
 
@@ -97,12 +97,17 @@ def sample_random(N, device):
 
     Retorna tensor (N, 2) com requires_grad=True.
     """
-    x = np.random.uniform(LB_X, UB_X, N)
-    z = np.random.uniform(LB_Z, UB_Z, N)
+    rng = np.random.default_rng(seed)
+
+    x = rng.uniform(LB_X, UB_X, N)
+    z = rng.uniform(LB_Z, UB_Z, N)
+
     pts = np.stack([x, z], axis=1)
 
-    X_col = torch.tensor(pts, dtype=torch.float32, device=device)
+    X_col = torch.from_numpy(pts).float().to(device)
+
     X_col.requires_grad_(True)
+
     return X_col
 
 
@@ -294,7 +299,7 @@ def train_helmholtz(model, optimizer, X_col, X_bc, U_bc,
         history['loss_pde'].append(loss_pde.item())
         history['loss_bc'].append(loss_bc.item())
 
-        if epoch % 500 == 0:
+        if epoch % 1000 == 0:
             print(f'Epoch {epoch:05d} | Loss: {loss.item():.2e} | '
                   f'Loss PDE: {loss_pde.item():.2e} | '
                   f'Loss BC: {loss_bc.item():.2e}')

@@ -1025,3 +1025,4 @@ def plot_l2_comparison(results_list, labels, title='Erro L² por estratégia de 
     )
 
     fig.show()
+
