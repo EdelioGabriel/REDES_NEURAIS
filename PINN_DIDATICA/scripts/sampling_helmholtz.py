@@ -12,7 +12,9 @@ Domínio: x in [-L/2, L/2], z in [0, L]
 Parâmetros: L=3, c=0.8, (a1, a2, a3) = (1, 0, 1)
 
 Referências:
-    - Baty, H. (2024). arXiv:2403.00599.
+    - Baty, H. (2024). arXiv:2403.00599
+    - Baty, H. & Vigon, V. (2024). MNRAS, 527, 2575-2584.
+    - McKay et al. (1979). Technometrics, 21(2), 239-245.
 """
 
 import torch
@@ -106,7 +108,7 @@ def sample_random(N, device):
     return X_col
 
 
-def sample_lhs(N, device, seed=367):
+def sample_lhs(N, device, seed=42):
     """
     Latin Hypercube Sampling — amostragem quasi-aleatória com
     melhor cobertura do domínio que a amostragem aleatória pura.
