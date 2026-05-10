@@ -82,3 +82,4 @@ class ResNetPINN(nn.Module):
         X = self.input_layer(X)
         X = self.res_blocks(X)
         return self.output_layer(X)
+#

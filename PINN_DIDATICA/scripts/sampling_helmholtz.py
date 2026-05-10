@@ -347,3 +347,4 @@ def evaluate_helmholtz(model, device, n_grid=100):
         'U_ref':    U_ref,
         'l2_error': l2_error,
     }
+#
