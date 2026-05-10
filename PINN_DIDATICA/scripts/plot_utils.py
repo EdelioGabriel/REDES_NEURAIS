@@ -789,3 +789,239 @@ def plot_residuo_scatter(X_val, residuo, title="Resíduo |−∇²u − 1|"):
         width=SQ_SIZE,
     )
     fig.show()
+
+def plot_sampling_points(point_sets, labels, title='Distribuição dos pontos de colocação'):
+    """
+    Plota a distribuição dos pontos de colocação para cada estratégia
+    de amostragem em subplots lado a lado.
+
+    Args:
+        point_sets: lista de arrays (N, 2) — um por estratégia
+        labels:     lista de strings — nome de cada estratégia
+        title:      título do plot
+    """
+    n = len(point_sets)
+    fig = make_subplots(
+        rows=1, cols=n,
+        subplot_titles=labels,
+        horizontal_spacing=0.08,
+    )
+
+    for col, (pts, label) in enumerate(zip(point_sets, labels), start=1):
+        fig.add_trace(go.Scatter(
+            x=pts[:, 0], y=pts[:, 1],
+            mode='markers',
+            name=label,
+            marker=dict(size=3, opacity=0.6, color=COLORS[col-1]),
+            showlegend=False,
+        ), row=1, col=col)
+
+        fig.update_xaxes(
+            **AXIS_COMMON,
+            title_text='x',
+            title_font=dict(size=FONT_SIZE),
+            row=1, col=col,
+        )
+        fig.update_yaxes(
+            **AXIS_COMMON,
+            title_text='z' if col == 1 else '',
+            title_font=dict(size=FONT_SIZE),
+            row=1, col=col,
+        )
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        width=n * (SQ_SIZE // 2) + 80,
+        height=SQ_SIZE // 2 + 120,
+    )
+
+    for ann in fig.layout.annotations:
+        ann.font = dict(size=FONT_SIZE)
+
+    fig.show()
+
+
+def plot_loss_comparison(histories, labels, title='Comparação das curvas de aprendizado'):
+    """
+    Plota as curvas de aprendizado de múltiplos experimentos no mesmo gráfico.
+
+    Args:
+        histories: lista de dicionários — um por estratégia
+        labels:    lista de strings — nome de cada estratégia
+        title:     título do plot
+    """
+    fig = go.Figure()
+
+    for history, label, color in zip(histories, labels, COLORS):
+        epochs = list(range(len(history['loss'])))
+        fig.add_trace(go.Scatter(
+            x=epochs, y=history['loss'],
+            mode='lines', name=label,
+            line=dict(color=color, width=2)
+        ))
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        xaxis=_square_axis('Época'),
+        yaxis=_square_axis('Perda total', log=True),
+        width=SQ_SIZE,
+        height=SQ_SIZE,
+        legend=dict(
+            x=1.02, y=1,
+            xanchor='left', yanchor='top',
+            orientation='v',
+            font=dict(size=FONT_SIZE - 1),
+            borderwidth=1,
+        ),
+    )
+
+    fig.update_yaxes(
+        type='log',
+        dtick=1,
+        exponentformat='power',
+        showexponent='all',
+    )
+
+    fig.show()
+
+
+def plot_heatmaps_comparison(results_list, labels, title='Comparação das soluções'):
+    """
+    Plota heatmaps comparativos para múltiplas estratégias de amostragem.
+    Cada linha corresponde a uma estratégia: predição e erro absoluto.
+    A referência é mostrada uma única vez.
+
+    Args:
+        results_list: lista de dicionários retornados por evaluate_helmholtz
+        labels:       lista de strings — nome de cada estratégia
+        title:        título do plot
+    """
+    n = len(results_list)
+    x = results_list[0]['x']
+    z = results_list[0]['z']
+
+    # referência é a mesma para todos
+    U_ref = results_list[0]['U_ref']
+    vmin  = U_ref.min()
+    vmax  = U_ref.max()
+
+    subplot_titles = []
+    for label in labels:
+        subplot_titles += [f'Predição — {label}', f'Erro — {label}']
+    subplot_titles = ['Referência', ''] + subplot_titles
+
+    fig = make_subplots(
+        rows=n + 1, cols=2,
+        subplot_titles=subplot_titles,
+        horizontal_spacing=0.12,
+        vertical_spacing=0.08,
+    )
+
+    # referência na primeira linha
+    fig.add_trace(go.Heatmap(
+        z=U_ref, x=x, y=z,
+        colorscale=COLORSCALE,
+        zmin=vmin, zmax=vmax,
+        showscale=True,
+        colorbar=dict(x=0.46, len=1/(n+1)*0.9,
+                      y=1 - 0.5/(n+1), thickness=12),
+    ), row=1, col=1)
+
+    # célula vazia na coluna 2 da linha 1
+    fig.add_trace(go.Scatter(x=[], y=[]), row=1, col=2)
+
+    # uma linha por estratégia
+    for row, (results, label) in enumerate(zip(results_list, labels), start=2):
+        E_abs = np.abs(results['U_pred'] - U_ref)
+
+        fig.add_trace(go.Heatmap(
+            z=results['U_pred'], x=x, y=z,
+            colorscale=COLORSCALE,
+            zmin=vmin, zmax=vmax,
+            showscale=False,
+        ), row=row, col=1)
+
+        fig.add_trace(go.Heatmap(
+            z=E_abs, x=x, y=z,
+            colorscale='Reds',
+            zmin=0, zmax=E_abs.max(),
+            showscale=True,
+            colorbar=dict(
+                x=1.02,
+                len=1/(n+1)*0.9,
+                y=1 - (row - 0.5)/(n+1),
+                thickness=12,
+                title=f'L2={results["l2_error"]:.2e}',
+                title_side='right',
+            ),
+        ), row=row, col=2)
+
+    for r in range(1, n + 2):
+        for c in [1, 2]:
+            fig.update_xaxes(
+                **AXIS_COMMON,
+                title_text='x',
+                title_font=dict(size=FONT_SIZE - 2),
+                row=r, col=c,
+            )
+            fig.update_yaxes(
+                **AXIS_COMMON,
+                title_text='z' if c == 1 else '',
+                title_font=dict(size=FONT_SIZE - 2),
+                row=r, col=c,
+            )
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        height=300 * (n + 1) + 100,
+        width=800,
+    )
+
+    for ann in fig.layout.annotations:
+        ann.font = dict(size=FONT_SIZE - 1)
+
+    fig.show()
+
+
+def plot_l2_comparison(results_list, labels, title='Erro L² por estratégia de amostragem'):
+    """
+    Plot de barras comparando o erro L2 de cada estratégia.
+
+    Args:
+        results_list: lista de dicionários retornados por evaluate_helmholtz
+        labels:       lista de strings — nome de cada estratégia
+        title:        título do plot
+    """
+    l2_errors = [r['l2_error'] for r in results_list]
+
+    fig = go.Figure(go.Bar(
+        x=labels,
+        y=l2_errors,
+        marker_color=COLORS[:len(labels)],
+        text=[f'{e:.2e}' for e in l2_errors],
+        textposition='outside',
+    ))
+
+    fig.update_layout(
+        **LAYOUT_BASE,
+        title=dict(text=title, font=dict(size=FONT_SIZE + 2)),
+        xaxis=dict(
+            **AXIS_COMMON,
+            title=dict(text='Estratégia', font=dict(size=FONT_SIZE)),
+        ),
+        yaxis=dict(
+            **AXIS_COMMON,
+            title=dict(text='Erro L²', font=dict(size=FONT_SIZE)),
+            type='log',
+            dtick=1,
+            exponentformat='power',
+            showexponent='all',
+        ),
+        width=SQ_SIZE,
+        height=SQ_SIZE,
+    )
+
+    fig.show()
