@@ -142,7 +142,7 @@ A escolha de como amostrar os pontos de colocação afeta diretamente a converg�
 
 ```bash
 git clone https://github.com/EdelioGabriel/REDES_NEURAIS.git
-cd REDES_NEURAIS/PINN_DIDATICA
+cd PINN_DIDATICA
 pip install -r requirements.txt
 ```
 
