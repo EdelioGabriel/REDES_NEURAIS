@@ -141,8 +141,7 @@ A escolha de como amostrar os pontos de colocação afeta diretamente a converg�
 ## 📦 Instalação
 
 ```bash
-git clone https://github.com/seu-usuario/pinns-journey.git
-cd pinns-journey
+git clone https://github.com/EdelioGabriel/REDES_NEURAIS/tree/main/PINN_DIDATICA
 pip install -r requirements.txt
 ```
 
