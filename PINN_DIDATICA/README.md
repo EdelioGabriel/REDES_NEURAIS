@@ -4,7 +4,7 @@
 
 Este repositório é um material didático progressivo sobre **Physics-Informed Neural Networks (PINNs)** — uma abordagem que combina redes neurais com equações diferenciais para resolver problemas físicos com pouca ou nenhuma dependência de dados rotulados.
 
-A jornada foi pensada para estudantes de ciência e tecnologia que já têm familiaridade com Python e noções básicas de redes neurais, mas querem entender PINNs de verdade — não apenas copiar código.
+A jornada foi pensada para estudantes de ciência e tecnologia que já têm familiaridade com Python e noções básicas de redes neurais, mas querem entender PINNs.
 
 ---
 
@@ -13,8 +13,8 @@ A jornada foi pensada para estudantes de ciência e tecnologia que já têm fami
 ```
 pinns-journey/
 │
-├── notebooks/                          # A jornada
-│   ├── 00_introduction.ipynb           # O que são PINNs?
+├── notebooks/                        
+│   ├── 00_introduction.ipynb          
 │   ├── 01_direct_stationary_vanilla.ipynb
 │   ├── 02_direct_stationary_hard.ipynb
 │   ├── 03_direct_transient.ipynb
@@ -26,16 +26,14 @@ pinns-journey/
 ├── scripts/                            # Código de suporte
 │   ├── geral_functions.py              # Funções compartilhadas
 │   ├── plot_utils.py                   # Visualizações
-│   ├── arquitectures.py                # Arquiteturas avançadas
+│   ├── arquitectures.py                # Arquitetura diferente de MLP
 │   ├── ex01_pinn_direct_stationary_vanilla.py
 │   ├── ex02_pinn_direct_stationary_hard.py
 │   ├── ex03_pinn_direct_transient.py
 │   ├── ex04_pinn_inverse_stationary.py
 │   ├── ex05_pinn_inverse_transient.py
-│   └── sampling.py
+│   └── sampling_helmholtz.py
 │
-├── data/                               # Soluções de referência
-├── assets/                             # Imagens e diagramas
 ├── requirements.txt
 └── README.md
 ```
@@ -60,8 +58,6 @@ O primeiro exemplo concreto. A rede aprende a solução a partir apenas das cond
 ∇²u = 0,   (x,y) ∈ [0,1]²
 u(x,0) = 0,   u(x,1) = sin(πx),   u(0,y) = u(1,y) = 0
 ```
-
-**Novidades:** vanilla-PINN, amostragem de pontos de colocação e contorno, validação analítica, erro L².
 
 ---
 
@@ -88,7 +84,7 @@ u_t + u·u_x = ν·u_xx,   x ∈ [-1,1],   t ∈ [0,1]
 u(x,0) = -sin(πx),   ν = 0.01/π
 ```
 
-**Novidades:** domínio espaço-temporal, condições iniciais, problema transiente, método das linhas (Lax-Friedrichs + BDF).
+**Novidades:** domínio espaço-temporal, condições iniciais, problema transiente
 
 ---
 
@@ -116,7 +112,7 @@ O problema inverso ganha a dimensão temporal. A partir de medições esparsas d
 c(x,y,0) = exp(-(‖r-r₀‖²)/(2σ²))
 ```
 
-**Novidades:** problema inverso transiente, dados numéricos como treinamento, diferenças finitas explícitas 2D.
+**Novidades:** problema inverso transiente, dados numéricos como treinamento
 
 ---
 
@@ -190,8 +186,6 @@ Se você já conhece PINNs e quer ir direto a um tópico específico:
 
 ## ✍️ Sobre o material
 
-Este material foi desenvolvido como notebook didático progressivo para estudantes de ciência e tecnologia. O foco está em **entender PINNs de verdade** — não apenas usar uma biblioteca, mas compreender cada escolha de formulação, arquitetura e treinamento.
+Este material foi desenvolvido como repositório didático. O foco está em **entender PINNs de verdade** — não apenas usar uma biblioteca, mas compreender cada escolha de formulação, arquitetura e treinamento.
 
 O código foi escrito para ser legível e progressivo — as funções dos exemplos simples aparecem explicitamente nos notebooks; as mais repetitivas ficam nos scripts de suporte. Os plots foram feitos com Plotly para interatividade.
-
-> *A jornada não fecha — ela abre.* Cada notebook termina apontando para direções que ficam em aberto: amostragem adaptativa, arquiteturas com ativação periódica (SIREN), PINNs para $D(x)$ variável, formulações multi-fidelidade.
