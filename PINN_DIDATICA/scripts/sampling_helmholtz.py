@@ -87,7 +87,7 @@ def sample_uniform(N, device, seed=None):
     return X_col
 
 
-def sample_random(N, device, seed=None):
+def sample_random(N, device, seed=367):
     """
     Amostragem aleatória — pontos sorteados uniformemente no domínio.
 
