@@ -23,10 +23,10 @@ pinns-journey/
 │   ├── 06_architectures.ipynb
 │   └── 07_sampling.ipynb
 │
-├── scripts/                            # Código de suporte
-│   ├── geral_functions.py              # Funções compartilhadas
-│   ├── plot_utils.py                   # Visualizações
-│   ├── arquitectures.py                # Arquitetura diferente de MLP
+├── scripts/                            
+│   ├── geral_functions.py              
+│   ├── plot_utils.py                 
+│   ├── arquitectures.py                
 │   ├── ex01_pinn_direct_stationary_vanilla.py
 │   ├── ex02_pinn_direct_stationary_hard.py
 │   ├── ex03_pinn_direct_transient.py
