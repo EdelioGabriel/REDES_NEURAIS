@@ -6,6 +6,7 @@ modelos ou funções analíticas. A conversão de tensores para arrays é
 responsabilidade do script particular de cada exemplo.
 
 Compatível com problemas estacionários (ex: Laplace) e transientes (ex: Burgers).
+Todo o código foi feito com auxílio de IA
 """
 
 import plotly.graph_objects as go
