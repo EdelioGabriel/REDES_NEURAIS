@@ -184,8 +184,12 @@ Se você já conhece PINNs e quer ir direto a um tópico específico:
 
 ---
 
-## ✍️ Sobre o material
+## 🤖 Sobre o o uso de IA
 
-Este material foi desenvolvido como repositório didático. O foco está em **entender PINNs de verdade** — não apenas usar uma biblioteca, mas compreender cada escolha de formulação, arquitetura e treinamento.
+Esse material fez uso de recursos de IA nas seguintes etapas de desenvolvimento:
 
-O código foi escrito para ser legível e progressivo — as funções dos exemplos simples aparecem explicitamente nos notebooks; as mais repetitivas ficam nos scripts de suporte. Os plots foram feitos com Plotly para interatividade.
+- Plotagem de gráficos;
+- Adaptações dos exemplos discutidos nos artigos de referência;
+- Melhorias nas explicações dos problemas físicos abordados;
+- Auxílio na compreensão das ferramentas matemáticas utilizadas;
+- Debug de código.
